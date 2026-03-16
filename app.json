@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Omway",
+    "slug": "omway",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ]
+  }
+}
