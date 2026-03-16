@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+pc_desktop_app/node_modules/
 
 # Expo / React Native local state
 .expo/
@@ -21,8 +22,12 @@ env/
 .env.*
 pc_client/.env
 pc_client/.env.*
+pc_desktop_app/.env
+pc_desktop_app/.env.*
+pc_client/.omway_state.json
 !.env.example
 !pc_client/.env.example
+!pc_desktop_app/.env.example
 
 # Build / logs
 dist/

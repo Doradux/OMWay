@@ -7,6 +7,10 @@ Current MVP features:
 - PC online presence detection per user account
 - iOS command button (`Prueba`) to trigger an action on a selected PC
 - Windows tray listener running in background (hidden icons)
+- PC tray settings window (login/register/logout)
+- Local session persistence on PC (keyring + local state)
+- Discord link bootstrap from tray
+- Optional modern desktop UI module (Electron + React + Tailwind) in `pc_desktop_app/`
 
 ## Project Status
 
@@ -56,6 +60,18 @@ Data paths:
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid"
       }
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "usernames": {
+      "$username": {
+        ".read": true,
+        ".write": "auth != null && !data.exists()"
+      }
     }
   }
 }
@@ -84,6 +100,7 @@ py listener.py
 Expected:
 - tray icon appears in Windows hidden icons
 - listener sends presence heartbeat
+- open `Settings` from tray to login/register
 
 ### 2) Start mobile app
 
@@ -103,7 +120,7 @@ Open in Expo Go on iPhone and log in with the same Firebase account used by list
 
 ## Next Milestones
 
-1. PC tray settings window (login/register UI)
+1. Complete Discord OAuth callback/token exchange backend
 2. Auto-start listener on Windows startup
 3. Device management (rename/remove PCs)
-4. Discord account linking and voice actions
+4. Discord voice actions and party intents

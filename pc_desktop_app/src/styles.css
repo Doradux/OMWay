@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI Variable", "Segoe UI", Inter, system-ui, sans-serif;
+  background: transparent;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #5865f2 #1e1f22;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #1e1f22;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #5865f2, #4752c4);
+  border-radius: 999px;
+  border: 2px solid #1e1f22;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #6976f7, #5865f2);
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.flip-scene {
+  perspective: 1100px;
+}
+
+.flip-card {
+  position: relative;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 560ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.flip-card.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.flip-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+
+.flip-back {
+  transform: rotateY(180deg);
+}
