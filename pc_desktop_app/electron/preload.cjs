@@ -8,6 +8,7 @@ try {
 contextBridge.exposeInMainWorld("omwayDesktop", {
   platform: process.platform,
   pcName,
+  openExternal: (url) => ipcRenderer.invoke("omway:openExternal", url),
   minimizeToTray: () => ipcRenderer.invoke("omway:minimizeToTray"),
   quitApp: () => ipcRenderer.invoke("omway:quit"),
   discordLinkAccount: () => ipcRenderer.invoke("omway:discordLinkAccount"),

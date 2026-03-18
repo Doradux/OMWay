@@ -20,7 +20,7 @@ Modern desktop panel for Omway built with Electron + React + Tailwind.
 ## Setup
 
 1. Copy `.env.example` to `.env`.
-2. Fill Firebase and Discord values.
+2. Fill Firebase, API and Discord values.
 3. Install dependencies:
 
 ```bash
@@ -36,23 +36,10 @@ npm run dev
 ## Notes
 
 - This module is separate from the existing Python listener.
-- Next integration step: connect this UI to the listener runtime/config directly.
+- Presence availability is now connected to `server/` through WebSocket (`/ws/pc`).
+- Required env: `VITE_OMWAY_API_BASE_URL` (example: `http://127.0.0.1:8080`).
 
-## Discord env vars
+## Discord note
 
-Use these keys in `pc_desktop_app/.env`:
-
-- `DISCORD_BOT_TOKEN`
-- `DISCORD_CLIENT_ID`
-- `DISCORD_CLIENT_SECRET`
-- `DISCORD_REDIRECT_URI` (default: `http://127.0.0.1:53682/callback`)
-- `DISCORD_SCOPES` (default: `identify guilds`)
-
-The app links the signed-in Omway user to their Discord account via OAuth, then uses:
-- linked Discord user id
-- bot token
-
-to:
-- load guilds shared with that linked user
-- list voice channels in a selected guild
-- send mute/deafen actions to that member
+Discord secrets are no longer required in desktop `.env`.
+OAuth + bot actions are handled by `server/` using server-side env vars.

@@ -363,6 +363,14 @@ app.whenReady().then(() => {
     return true;
   });
 
+  ipcMain.handle("omway:openExternal", async (_event, url) => {
+    if (!url || typeof url !== "string") {
+      throw new Error("URL is required.");
+    }
+    await shell.openExternal(url);
+    return true;
+  });
+
   ipcMain.handle("omway:discordSharedGuilds", async (_event, discordUserId) => {
     return getSharedGuilds(discordUserId);
   });

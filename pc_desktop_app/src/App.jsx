@@ -5,11 +5,12 @@ import {
   signOut,
   signInWithEmailAndPassword
 } from "firebase/auth";
-import { get, ref, set, update } from "firebase/database";
+import { get, ref, set } from "firebase/database";
 import { getOmwayAuth, getOmwayDb } from "./lib/firebase";
 import Toast from "./components/Toast";
 
 export default function App() {
+  const API_BASE = (import.meta.env.VITE_OMWAY_API_BASE_URL || "").replace(/\/$/, "");
   const [initError] = useState(() => {
     const required = [
       "VITE_FIREBASE_API_KEY",
@@ -23,6 +24,9 @@ export default function App() {
     const missing = required.filter((key) => !import.meta.env[key]);
     if (missing.length > 0) {
       return `Missing env vars in pc_desktop_app/.env: ${missing.join(", ")}`;
+    }
+    if (!API_BASE) {
+      return "Missing env var in pc_desktop_app/.env: VITE_OMWAY_API_BASE_URL";
     }
     return "";
   });
@@ -38,6 +42,7 @@ export default function App() {
   const menuButtonRef = useRef(null);
   const serversRef = useRef(null);
   const serversButtonRef = useRef(null);
+  const wsRef = useRef(null);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -95,6 +100,56 @@ export default function App() {
   }, [auth, db, pcId, systemPcName]);
 
   useEffect(() => {
+    if (!sessionUser || !API_BASE) return undefined;
+    let cancelled = false;
+
+    async function connectPcSocket() {
+      try {
+        const idToken = await sessionUser.getIdToken();
+        if (cancelled) return;
+
+        const wsBase = API_BASE.replace(/^http/i, "ws");
+        const socketUrl =
+          `${wsBase}/ws/pc` +
+          `?token=${encodeURIComponent(idToken)}` +
+          `&pcId=${encodeURIComponent(pcId)}` +
+          `&deviceName=${encodeURIComponent(appPcName || systemPcName)}`;
+
+        const socket = new WebSocket(socketUrl);
+        wsRef.current = socket;
+
+        socket.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data || "{}");
+            if (message?.type === "presence_check") {
+              socket.send(
+                JSON.stringify({
+                  type: "presence_ready",
+                  requestId: message.requestId || "",
+                  at: Date.now()
+                })
+              );
+            }
+          } catch {
+            // ignore malformed payloads
+          }
+        };
+      } catch (error) {
+        showToast("PC link error", error.message || String(error));
+      }
+    }
+
+    connectPcSocket();
+    return () => {
+      cancelled = true;
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [sessionUser, API_BASE, pcId, appPcName, systemPcName]);
+
+  useEffect(() => {
     if (!menuOpen) return undefined;
 
     function handlePointerDown(event) {
@@ -118,6 +173,26 @@ export default function App() {
 
   function showToast(title, message) {
     setToast({ title, message });
+  }
+
+  async function apiFetch(pathname, options = {}) {
+    if (!auth?.currentUser) {
+      throw new Error("Session required.");
+    }
+    const idToken = await auth.currentUser.getIdToken();
+    const response = await fetch(`${API_BASE}${pathname}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      }
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body?.error || `API ${response.status}`);
+    }
+    return body;
   }
 
   async function onLogin(event) {
@@ -197,14 +272,10 @@ export default function App() {
 
   async function onFetchSharedGuilds() {
     if (!sessionUser || discordLoading) return;
-    if (!linkedDiscord?.id) {
-      showToast("Missing link", "Link your Discord account first.");
-      return;
-    }
     try {
       setDiscordLoading(true);
-      const guilds = await window.omwayDesktop?.discordSharedGuilds?.(linkedDiscord.id);
-      setSharedGuilds(guilds || []);
+      const response = await apiFetch("/discord/shared-guilds", { method: "GET" });
+      setSharedGuilds(response.guilds || []);
       setSelectedGuildId("");
       setVoiceChannels([]);
     } catch (error) {
@@ -223,8 +294,10 @@ export default function App() {
     }
     try {
       setChannelsLoading(true);
-      const channels = await window.omwayDesktop?.discordVoiceChannels?.(guildId);
-      setVoiceChannels(channels || []);
+      const response = await apiFetch(`/discord/voice-channels?guildId=${encodeURIComponent(guildId)}`, {
+        method: "GET"
+      });
+      setVoiceChannels(response.channels || []);
     } catch (error) {
       showToast("Discord error", error.message || String(error));
     } finally {
@@ -234,6 +307,10 @@ export default function App() {
 
   async function onLogout() {
     try {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
       await signOut(auth);
       setMenuOpen(false);
       showToast("Logged out", "Session closed.");
@@ -248,6 +325,10 @@ export default function App() {
   }
 
   function onQuitApp() {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
     window.omwayDesktop?.quitApp?.();
     setMenuOpen(false);
   }
@@ -265,11 +346,13 @@ export default function App() {
         updatedAt: Date.now()
       };
       await set(ref(db, `users/${sessionUser.uid}/devices/${pcId}`), devicePayload);
-      await update(ref(db, `presence/${sessionUser.uid}/${pcId}`), {
-        pcId,
-        deviceName: nextName,
-        systemName: systemPcName,
-        lastSeenAt: Date.now()
+      await apiFetch("/pcs/rename", {
+        method: "POST",
+        body: JSON.stringify({
+          pcId,
+          appName: nextName,
+          systemName: systemPcName
+        })
       });
       setAppPcName(nextName);
       setSavePcState("success");
@@ -286,22 +369,36 @@ export default function App() {
     if (!sessionUser || discordLoading) return;
     try {
       setDiscordLoading(true);
-      if (!window.omwayDesktop?.discordLinkAccount) {
-        throw new Error("Desktop bridge unavailable. Restart the app.");
+      const start = await apiFetch("/discord/link/start", { method: "POST", body: "{}" });
+      if (!start?.url || !start?.state) {
+        throw new Error("Invalid link session response.");
       }
-      const linked = await window.omwayDesktop.discordLinkAccount();
-      if (!linked?.id) {
-        throw new Error(
-          `Discord link failed: invalid response (${JSON.stringify(linked)})`
+
+      if (window.omwayDesktop?.openExternal) {
+        await window.omwayDesktop.openExternal(start.url);
+      } else {
+        window.open(start.url, "_blank", "noopener,noreferrer");
+      }
+
+      const startedAt = Date.now();
+      let linked = null;
+      while (Date.now() - startedAt < 120_000) {
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        const status = await apiFetch(
+          `/discord/link/status?state=${encodeURIComponent(start.state)}`,
+          { method: "GET" }
         );
+        if (status.status === "linked") {
+          linked = status.linked;
+          break;
+        }
+        if (status.status === "expired") {
+          throw new Error("Discord link session expired. Try again.");
+        }
       }
-      await set(ref(db, `users/${sessionUser.uid}/discord`), {
-        id: linked.id,
-        username: linked.username || "",
-        globalName: linked.globalName || "",
-        avatar: linked.avatar || null,
-        linkedAt: Date.now()
-      });
+      if (!linked?.id) {
+        throw new Error("Discord link timed out.");
+      }
       setLinkedDiscord(linked);
       setSharedGuilds([]);
       setSelectedGuildId("");

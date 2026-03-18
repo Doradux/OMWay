@@ -28,6 +28,7 @@ pc_client/.omway_state.json
 !.env.example
 !pc_client/.env.example
 !pc_desktop_app/.env.example
+!server/.env.example
 
 # Build / logs
 dist/

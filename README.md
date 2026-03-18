@@ -4,8 +4,10 @@ Omway connects your iPhone and your gaming PC so you can prepare your setup remo
 
 Current MVP features:
 - Firebase Auth login (email/password) on mobile and PC listener
+- Mobile friends system (send request, accept/reject, friend list)
 - PC online presence detection per user account
 - iOS command button (`Prueba`) to trigger an action on a selected PC
+- Central API backend (`server/`) to broker mobile <-> PC messages
 - Windows tray listener running in background (hidden icons)
 - PC tray settings window (login/register/logout)
 - Local session persistence on PC (keyring + local state)
@@ -22,11 +24,14 @@ This repository is in MVP stage and focused on validating:
 ## Architecture
 
 - Mobile app (Expo React Native): `App.js`
+- API backend (Express + WebSocket): `server/src/index.js`
 - Firebase bootstrap: `src/firebase.js`
 - Windows tray listener: `pc_client/listener.py`
+- Desktop app runtime (PC websocket client): `pc_desktop_app/src/App.jsx`
 
 Data paths:
-- `presence/{uid}/{pcId}`: heartbeat and online state
+- `presence/{uid}/{pcId}`: last seen/status for each PC
+- `presenceChecks/{uid}/{pcId}`: on-demand ping request from mobile
 - `commands/{uid}/{pcId}/latest`: latest command from mobile
 - `commands/{uid}/{pcId}/ack`: command execution result
 
@@ -61,10 +66,40 @@ Data paths:
         ".write": "auth != null && auth.uid === $uid"
       }
     },
+    "presenceChecks": {
+      "$uid": {
+        "$pcId": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      }
+    },
     "users": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        "friends": {
+          "$friendUid": {
+            ".read": "auth != null && (auth.uid === $uid || auth.uid === $friendUid)",
+            ".write": "auth != null && (auth.uid === $uid || auth.uid === $friendUid)"
+          }
+        }
+      }
+    },
+    "friendRequests": {
+      "$uid": {
+        "incoming": {
+          "$fromUid": {
+            ".read": "auth != null && (auth.uid === $uid || auth.uid === $fromUid)",
+            ".write": "auth != null && (auth.uid === $uid || auth.uid === $fromUid)"
+          }
+        },
+        "outgoing": {
+          "$toUid": {
+            ".read": "auth != null && (auth.uid === $uid || auth.uid === $toUid)",
+            ".write": "auth != null && (auth.uid === $uid || auth.uid === $toUid)"
+          }
+        }
       }
     },
     "usernames": {
@@ -82,34 +117,49 @@ Data paths:
 Copy templates:
 - `.env.example` -> `.env`
 - `pc_client/.env.example` -> `pc_client/.env`
+- `server/.env.example` -> `server/.env`
 
 Fill values from your Firebase project:
 - Mobile app uses `EXPO_PUBLIC_FIREBASE_*`
+- Mobile app also needs `EXPO_PUBLIC_OMWAY_API_BASE_URL`
 - PC listener uses `OMWAY_*`
+- Desktop app needs `VITE_OMWAY_API_BASE_URL`
+- Server uses `FIREBASE_*` service-account vars
+- Discord secrets (`DISCORD_*`) live only in `server/.env`
 
 ## Run (Local)
 
-### 1) Start PC listener
+### 1) Start backend API
 
 ```bash
-cd pc_client
-pip install -r requirements.txt
-py listener.py
+cd server
+npm install
+npm run dev
 ```
 
 Expected:
-- tray icon appears in Windows hidden icons
-- listener sends presence heartbeat
-- open `Settings` from tray to login/register
+- API serves HTTP + WebSocket on `http://localhost:8080`
 
-### 2) Start mobile app
+### 2) Start desktop app
+
+```bash
+cd pc_desktop_app
+npm install
+npm run dev
+```
+
+Expected:
+- desktop app logs in and registers current PC socket to API
+- app responds to on-demand presence checks from mobile
+
+### 3) Start mobile app
 
 ```bash
 npm install
 npm start
 ```
 
-Open in Expo Go on iPhone and log in with the same Firebase account used by listener.
+Open in Expo Go on iPhone and log in with the same Firebase account used by desktop app.
 
 ## Security Notes
 
